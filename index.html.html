@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SQL — ภาพตารางและการดึงข้อมูล</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1117;
+    --surface: #181c27;
+    --surface2: #1e2333;
+    --border: rgba(255,255,255,0.08);
+    --border2: rgba(255,255,255,0.14);
+    --text: #e8eaf0;
+    --muted: #7a7f96;
+    --hint: #4a4f66;
+    --blue: #4f8ef7;
+    --blue-dim: rgba(79,142,247,0.12);
+    --blue-border: rgba(79,142,247,0.35);
+    --green: #3ecf8e;
+    --green-dim: rgba(62,207,142,0.1);
+    --amber: #f5a623;
+    --amber-dim: rgba(245,166,35,0.12);
+    --purple: #a78bfa;
+    --purple-dim: rgba(167,139,250,0.12);
+    --purple-border: rgba(167,139,250,0.35);
+    --teal: #2dd4bf;
+    --teal-dim: rgba(45,212,191,0.1);
+    --teal-border: rgba(45,212,191,0.35);
+    --red: #f06565;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'Sarabun', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: var(--sans);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: 40px 24px 80px;
+    line-height: 1.6;
+  }
+  .page-header { text-align: center; margin-bottom: 40px; }
+  .tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 2px 10px;
+    border-radius: 20px;
+    background: var(--blue-dim);
+    color: var(--blue);
+    border: 0.5px solid var(--blue-border);
+    margin-bottom: 12px;
+  }
+  .page-header h1 { font-size: 26px; font-weight: 600; letter-spacing: -0.5px; margin-bottom: 6px; }
+  .page-header p { font-size: 13px; color: var(--muted); }
+
+  .card {
+    max-width: 820px;
+    margin: 0 auto;
+    background: var(--surface);
+    border: 0.5px solid var(--border2);
+    border-radius: 14px;
+    padding: 24px;
+  }
+
+  .sql-display {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--surface2);
+    border: 0.5px solid var(--border2);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+    line-height: 2.2;
+  }
+  .kw { font-weight: 500; color: var(--hint); transition: color .3s; }
+  .kw.active-blue   { color: var(--blue);   text-decoration: underline; }
+  .kw.active-purple { color: var(--purple); text-decoration: underline; }
+  .kw.active-teal   { color: var(--teal);   text-decoration: underline; }
+
+  .progress-bar { height: 2px; background: var(--border2); border-radius: 2px; margin-bottom: 14px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--blue); border-radius: 2px; transition: width .4s ease; }
+
+  .desc-box {
+    font-size: 13px;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 0.5px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    min-height: 44px;
+    line-height: 1.7;
+  }
+  .desc-box strong { color: var(--text); }
+  .desc-box code {
+    font-family: var(--mono);
+    font-size: 11px;
+    background: rgba(255,255,255,0.07);
+    padding: 1px 5px;
+    border-radius: 4px;
+    color: var(--amber);
+  }
+
+  .tables-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+  .tbl-card { border: 0.5px solid var(--border2); border-radius: 10px; overflow: hidden; }
+  .tbl-header {
+    font-size: 11px; font-weight: 500;
+    color: var(--muted);
+    padding: 7px 12px;
+    background: var(--surface2);
+    border-bottom: 0.5px solid var(--border);
+    font-family: var(--mono);
+    letter-spacing: 0.5px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left; padding: 5px 10px;
+    font-size: 11px; font-weight: 500;
+    color: var(--hint);
+    background: var(--surface2);
+    border-bottom: 0.5px solid var(--border);
+    font-family: var(--mono);
+  }
+  td {
+    padding: 6px 10px;
+    border-bottom: 0.5px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    transition: background .3s, color .3s, opacity .3s;
+  }
+  tr:last-child td { border-bottom: none; }
+  .r-hi td      { background: rgba(79,142,247,0.1);  color: var(--blue); }
+  .r-dim td     { opacity: 0.2; }
+  .r-joined td  { background: var(--green-dim);       color: var(--green); }
+  .r-selected td{ background: var(--blue-dim);        color: var(--blue); }
+  .r-warn td    { background: var(--amber-dim);       color: var(--amber); }
+  .r-purple td  { background: var(--purple-dim);      color: var(--purple); }
+  .r-teal td    { background: var(--teal-dim);        color: var(--teal); }
+  .r-teal-dim td{ background: var(--teal-dim); color: var(--teal); opacity: 0.35; }
+  .r-order-1 td { background: rgba(167,139,250,0.18); color: var(--purple); font-weight: 500; }
+  .r-order-2 td { background: var(--purple-dim);      color: var(--purple); }
+
+  .result-card {
+    border: 0.5px solid var(--blue-border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 18px;
+    display: none;
+  }
+  .result-card.purple { border-color: var(--purple-border); }
+  .result-card.teal   { border-color: var(--teal-border); }
+
+  .result-header {
+    font-size: 12px; font-weight: 500;
+    padding: 8px 12px;
+    background: var(--blue-dim);
+    color: var(--blue);
+    border-bottom: 0.5px solid var(--blue-border);
+    font-family: var(--mono);
+  }
+  .result-card.purple .result-header { background: var(--purple-dim); color: var(--purple); border-color: var(--purple-border); }
+  .result-card.teal   .result-header { background: var(--teal-dim);   color: var(--teal);   border-color: var(--teal-border); }
+
+  .sort-arrow { display: inline-block; margin-left: 4px; font-size: 10px; }
+
+  .controls {
+    display: flex; gap: 10px; align-items: center;
+  }
+  .btn {
+    font-family: var(--sans);
+    font-size: 13px;
+    padding: 7px 18px;
+    border-radius: 8px;
+    border: 0.5px solid var(--border2);
+    background: var(--surface2);
+    color: var(--text);
+    cursor: pointer;
+    transition: all .2s;
+  }
+  .btn:hover { border-color: var(--blue-border); color: var(--blue); }
+  .btn:active { transform: scale(0.97); }
+  .dots { display: flex; gap: 5px; margin-left: auto; align-items: center; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border2); transition: background .3s; }
+  .dot.active  { background: var(--blue); }
+  .dot.done    { background: var(--green); }
+
+  @media (max-width: 560px) {
+    .tables-grid { grid-template-columns: 1fr; }
+    body { padding: 24px 14px 60px; }
+    .page-header h1 { font-size: 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <div class="tag">SQL Visual Guide</div>
+  <h1>ภาพตารางและการดึงข้อมูล</h1>
+  <p>กด ถัดไป เพื่อดูว่าข้อมูลเปลี่ยนไปอย่างไรในแต่ละขั้นตอน</p>
+</div>
+
+<div class="card">
+  <div class="sql-display">
+    <span class="kw" id="kw-select">SELECT</span> <span style="color:var(--muted)">d.name, COUNT(*) AS total, AVG(e.salary) AS avg_sal</span><br>
+    <span class="kw" id="kw-from">FROM</span> <span style="color:var(--muted)">employees e</span><br>
+    <span class="kw" id="kw-join">JOIN</span> <span style="color:var(--muted)">departments d ON e.dept_id = d.id</span><br>
+    <span class="kw" id="kw-where">WHERE</span> <span style="color:var(--muted)">e.salary > 50000</span><br>
+    <span class="kw" id="kw-group">GROUP BY</span> <span style="color:var(--muted)">d.name</span><br>
+    <span class="kw" id="kw-having">HAVING</span> <span style="color:var(--muted)">COUNT(*) >= 1</span><br>
+    <span class="kw" id="kw-order">ORDER BY</span> <span style="color:var(--muted)">avg_sal DESC</span><br>
+    <span class="kw" id="kw-limit">LIMIT</span> <span style="color:var(--muted)">2</span>
+  </div>
+
+  <div class="progress-bar"><div class="progress-fill" id="prog" style="width:0%"></div></div>
+  <div class="desc-box" id="desc">กด <strong>ถัดไป</strong> เพื่อดูว่าข้อมูลในตารางเปลี่ยนไปอย่างไรในแต่ละขั้นตอน</div>
+
+  <div class="tables-grid" id="tables-area">
+    <div class="tbl-card">
+      <div class="tbl-header">employees</div>
+      <table id="emp-tbl">
+        <thead><tr><th>id</th><th>name</th><th>dept_id</th><th>salary</th></tr></thead>
+        <tbody>
+          <tr data-id="1"><td>1</td><td>อลิส</td><td>10</td><td>72,000</td></tr>
+          <tr data-id="2"><td>2</td><td>บ็อบ</td><td>20</td><td>45,000</td></tr>
+          <tr data-id="3"><td>3</td><td>ชาร์ลี</td><td>10</td><td>68,000</td></tr>
+          <tr data-id="4"><td>4</td><td>ไดอาน่า</td><td>30</td><td>91,000</td></tr>
+          <tr data-id="5"><td>5</td><td>เอ็ด</td><td>20</td><td>55,000</td></tr>
+          <tr data-id="6"><td>6</td><td>ฟิโอน่า</td><td>30</td><td>48,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="tbl-card">
+      <div class="tbl-header">departments</div>
+      <table id="dept-tbl">
+        <thead><tr><th>id</th><th>name</th></tr></thead>
+        <tbody>
+          <tr data-id="10"><td>10</td><td>Engineering</td></tr>
+          <tr data-id="20"><td>20</td><td>Marketing</td></tr>
+          <tr data-id="30"><td>30</td><td>Sales</td></tr>
+        </tbody>
+      </table>
+    </div>
+    </div>
+
+  <div class="result-card" id="result-card">
+    <div class="result-header" id="result-head">ผลลัพธ์</div>
+    <div id="result-body"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn" onclick="goPrev()">← ย้อนกลับ</button>
+    <button class="btn" onclick="goNext()">ถัดไป →</button>
+    <div class="dots" id="dots"></div>
+  </div>
+</div>
+
+<script>
+const steps = [
+  {
+    kws: { 'kw-from': 'active-blue' },
+    desc: '<strong>① FROM</strong> — ดึงทุกแถวจากตาราง <code>employees</code> ก่อนเป็นอันดับแรก (6 แถว)',
+    action() {
+      document.querySelectorAll('#emp-tbl tbody tr').forEach(r => r.className = 'r-hi');
+      showTables();
+    }
+  },
+  {
+    kws: { 'kw-from': 'active-blue', 'kw-join': 'active-blue' },
+    desc: '<strong>② JOIN</strong> — รวม <code>employees</code> กับ <code>departments</code> จับคู่ด้วย <code>dept_id = id</code>',
+    action() {
+      document.querySelectorAll('#emp-tbl tbody tr').forEach(r => r.className = 'r-joined');
+      document.querySelectorAll('#dept-tbl tbody tr').forEach(r => r.className = 'r-joined');
+      showResult('blue', 'หลัง JOIN — ตารางรวม (6 แถว)', `
+        <table><thead><tr><th>id</th><th>name</th><th>dept</th><th>salary</th></tr></thead><tbody>
+          <tr class="r-joined"><td>1</td><td>อลิส</td><td>Engineering</td><td>72,000</td></tr>
+          <tr class="r-joined"><td>2</td><td>บ็อบ</td><td>Marketing</td><td>45,000</td></tr>
+          <tr class="r-joined"><td>3</td><td>ชาร์ลี</td><td>Engineering</td><td>68,000</td></tr>
+          <tr class="r-joined"><td>4</td><td>ไดอาน่า</td><td>Sales</td><td>91,000</td></tr>
+          <tr class="r-joined"><td>5</td><td>เอ็ด</td><td>Marketing</td><td>55,000</td></tr>
+          <tr class="r-joined"><td>6</td><td>ฟิโอน่า</td><td>Sales</td><td>48,000</td></tr>
+        </tbody></table>`);
+    }
+  },
+  {
+    kws: { 'kw-where': 'active-blue' },
+    desc: '<strong>③ WHERE</strong> — กรอง <code>salary > 50,000</code> บ็อบ (45k) และฟิโอน่า (48k) ถูกตัดออก เหลือ 4 แถว',
+    action() {
+      const pass = [1,3,4,5], dim = [2,6];
+      document.querySelectorAll('#emp-tbl tbody tr').forEach(r => {
+        r.className = pass.includes(+r.dataset.id) ? 'r-hi' : dim.includes(+r.dataset.id) ? 'r-dim' : '';
+      });
+      showTables();
+    }
+  },
+  {
+    kws: { 'kw-group': 'active-blue' },
+    desc: '<strong>④ GROUP BY</strong> — จัดกลุ่มตาม <code>d.name</code> ได้ 3 กลุ่ม พร้อมคำนวณ COUNT และ AVG',
+    action() {
+      showResult('blue', 'หลัง GROUP BY — 3 กลุ่ม', `
+        <table><thead><tr><th>แผนก</th><th>สมาชิก (salary > 50k)</th><th>COUNT</th><th>AVG salary</th></tr></thead><tbody>
+          <tr class="r-selected"><td>Engineering</td><td>อลิส 72k, ชาร์ลี 68k</td><td>2</td><td>70,000</td></tr>
+          <tr class="r-selected"><td>Marketing</td><td>เอ็ด 55k</td><td>1</td><td>55,000</td></tr>
+          <tr class="r-selected"><td>Sales</td><td>ไดอาน่า 91k</td><td>1</td><td>91,000</td></tr>
+        </tbody></table>`);
+    }
+  },
+  {
+    kws: { 'kw-having': 'active-blue' },
+    desc: '<strong>⑤ HAVING</strong> — กรองกลุ่มที่ <code>COUNT(*) >= 1</code> ทุกกลุ่มผ่านหมด (ปรับเงื่อนไขให้เห็นผลใน ORDER BY ได้ชัดขึ้น)',
+    action() {
+      showResult('blue', 'หลัง HAVING COUNT(*) >= 1 — ผ่านทั้ง 3 กลุ่ม', `
+        <table><thead><tr><th>แผนก</th><th>COUNT</th><th>AVG salary</th><th>ผล</th></tr></thead><tbody>
+          <tr class="r-selected"><td>Engineering</td><td>2</td><td>70,000</td><td style="color:var(--green)">✓ ผ่าน</td></tr>
+          <tr class="r-selected"><td>Marketing</td><td>1</td><td>55,000</td><td style="color:var(--green)">✓ ผ่าน</td></tr>
+          <tr class="r-selected"><td>Sales</td><td>1</td><td>91,000</td><td style="color:var(--green)">✓ ผ่าน</td></tr>
+        </tbody></table>`);
+    }
+  },
+  {
+    kws: { 'kw-select': 'active-blue' },
+    desc: '<strong>⑥ SELECT</strong> — เพิ่งเลือก column ที่ต้องการตอนนี้เอง แม้เขียนไว้บนสุด แต่รันหลัง HAVING เสมอ',
+    action() {
+      showResult('blue', 'หลัง SELECT — เลือก column ที่ต้องการ', `
+        <table><thead><tr><th>name</th><th>total</th><th>avg_sal</th></tr></thead><tbody>
+          <tr class="r-selected"><td>Engineering</td><td>2</td><td>70,000</td></tr>
+          <tr class="r-selected"><td>Marketing</td><td>1</td><td>55,000</td></tr>
+          <tr class="r-selected"><td>Sales</td><td>1</td><td>91,000</td></tr>
+        </tbody></table>`);
+    }
+  },
+  {
+    kws: { 'kw-order': 'active-purple' },
+    desc: '<strong>⑦ ORDER BY</strong> — เรียง <code>avg_sal DESC</code> จากมากไปน้อย Sales (91k) ขึ้นมาอันดับ 1 ทำงานหลัง SELECT จึงใช้ชื่อ alias <code>avg_sal</code> ได้',
+    action() {
+      showResult('purple', 'หลัง ORDER BY avg_sal DESC — เรียงใหม่', `
+        <table><thead><tr><th>#</th><th>name</th><th>total</th><th>avg_sal <span class="sort-arrow">▼</span></th></tr></thead><tbody>
+          <tr class="r-order-1"><td>1</td><td>Sales</td><td>1</td><td>91,000</td></tr>
+          <tr class="r-order-2"><td>2</td><td>Engineering</td><td>2</td><td>70,000</td></tr>
+          <tr class="r-order-2"><td>3</td><td>Marketing</td><td>1</td><td>55,000</td></tr>
+        </tbody></table>`);
+    }
+  },
+  {
+    kws: { 'kw-limit': 'active-teal' },
+    desc: '<strong>⑧ LIMIT 2</strong> — ตัดเหลือแค่ 2 แถวแรก Marketing ถูกตัดออก นี่คือผลลัพธ์สุดท้ายที่ส่งกลับ',
+    action() {
+      showResult('teal', 'ผลลัพธ์สุดท้าย — LIMIT 2 เหลือ 2 แถว', `
+        <table><thead><tr><th>#</th><th>name</th><th>total</th><th>avg_sal <span class="sort-arrow">▼</span></th></tr></thead><tbody>
+          <tr class="r-teal"><td>1</td><td>Sales</td><td>1</td><td>91,000</td></tr>
+          <tr class="r-teal"><td>2</td><td>Engineering</td><td>2</td><td>70,000</td></tr>
+          <tr class="r-teal-dim"><td style="text-decoration:line-through;opacity:.4">3</td><td style="text-decoration:line-through;opacity:.4">Marketing</td><td style="text-decoration:line-through;opacity:.4">1</td><td style="text-decoration:line-through;opacity:.4">55,000</td></tr>
+        </tbody></table>`);
+    }
+  },
+];
+
+let cur = -1;
+
+const allKws = ['kw-select','kw-from','kw-join','kw-where','kw-group','kw-having','kw-order','kw-limit'];
+
+function showTables() {
+  document.getElementById('tables-area').style.display = 'grid';
+  const rc = document.getElementById('result-card');
+  rc.style.display = 'none';
+  rc.className = 'result-card';
+}
+function showResult(color, head, html) {
+  document.getElementById('tables-area').style.display = 'none';
+  const rc = document.getElementById('result-card');
+  rc.style.display = 'block';
+  rc.className = 'result-card ' + color;
+  document.getElementById('result-head').textContent = head;
+  document.getElementById('result-body').innerHTML = html;
+}
+function clearRows() {
+  document.querySelectorAll('#emp-tbl tbody tr, #dept-tbl tbody tr').forEach(r => r.className = '');
+}
+function updateKws() {
+  const active = cur >= 0 ? steps[cur].kws : {};
+  allKws.forEach(k => {
+    const el = document.getElementById(k);
+    el.className = 'kw';
+    if (active[k]) el.classList.add(active[k]);
+  });
+}
+function updateDots() {
+  const el = document.getElementById('dots');
+  el.innerHTML = '';
+  steps.forEach((_,i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === cur ? ' active' : i < cur ? ' done' : '');
+    el.appendChild(d);
+  });
+}
+function render() {
+  updateKws();
+  updateDots();
+  document.getElementById('prog').style.width = (cur < 0 ? 0 : (cur+1)/steps.length*100) + '%';
+  document.getElementById('desc').innerHTML = cur >= 0
+    ? steps[cur].desc
+    : 'กด <strong>ถัดไป</strong> เพื่อดูว่าข้อมูลในตารางเปลี่ยนไปอย่างไรในแต่ละขั้นตอน';
+}
+function goTo(i) {
+  cur = i;
+  clearRows();
+  showTables();
+  if (cur >= 0) steps[cur].action();
+  render();
+}
+function goNext() { if (cur < steps.length - 1) goTo(cur + 1); }
+function goPrev() {
+  if (cur > 0) goTo(cur - 1);
+  else { cur = -1; clearRows(); showTables(); render(); }
+}
+
+render();
+</script>
+</body>
+</html>
